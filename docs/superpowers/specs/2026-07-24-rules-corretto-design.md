@@ -193,7 +193,11 @@ bazel run //tools/update -- --verify # download changed archives; check sha256 +
 
 - `version-info.json` — which majors to emit: `supported_lts_releases`
   (currently `[8, 11, 17, 21, 25]`); `supported_feature_releases` included only with
-  `--include-feature-releases`.
+  `--include-feature-releases`. This pass doubles as a validation layer: the updater
+  diffs the supported-majors set against what `versions.bzl` currently contains and
+  reports additions (new LTS promoted) and removals (line gone EOL) explicitly, so a
+  human reviewing the update PR sees lifecycle changes called out rather than buried in
+  config churn.
 - `indexmap_with_checksum.json` (~249 KB, single fetch) — for the latest build of every
   major × os × arch × image type × format: the permanent CDN resource path
   (`/downloads/resources/<full_version>/<filename>`) and `checksum_sha256`.
@@ -213,11 +217,23 @@ windows}, arch ∈ {x64, aarch64}.
 | `strip_prefix` (macos) | `amazon-corretto-<major>.jdk/Contents/Home` — bundle layout, stable across patch releases; puts JAVA_HOME at repo root |
 | `strip_prefix` (windows) | `jdk<a>.<b>.<c>_<d>` for Corretto version `a.b.c.d.e` (e.g. `21.0.12.8.1` → `jdk21.0.12_8`); JDK 8 special case: `8.502.07.1` → `jdk1.8.0_502` (`jdk1.8.0_<update>`) |
 
-Because Windows and JDK 8 prefixes are derived rather than read from metadata,
-`--verify` (run in CI on update PRs, not on every invocation) downloads each changed
-archive once, recomputes sha256, and asserts the archive's actual top-level directory
-matches the emitted `strip_prefix` — the analogue of rules_java's
-`check_remote_jdk_configs.sh`.
+**Streamed strip_prefix verification (cheap, every run):** because Windows and JDK 8
+prefixes are derived rather than read from metadata, the updater verifies every derived
+`strip_prefix` by streaming just the beginning of the archive over HTTP — enough to
+read the first tar entry header (tar.gz) or first local file header (zip), which
+carries the top-level directory name — then aborting the connection. Kilobytes per
+archive instead of hundreds of megabytes, so this check runs on every updater
+invocation for changed entries, and a derivation-rule drift (e.g. Amazon changing the
+Windows layout) is caught at generation time, not in CI. This partial-stream-then-abort
+technique is the same idea already present in the seed code: `JsonParser` deliberately
+reads incrementally from a `Reader` and stops as soon as it has a complete value,
+allowing metadata to be pulled from a live HTTP stream without consuming the whole
+body.
+
+**Full verification (`--verify`, CI on update PRs only):** downloads each changed
+archive completely, recomputes sha256 against the indexmap value (defense-in-depth —
+the checksum already comes from Amazon's metadata), and re-asserts the top-level
+directory — the analogue of rules_java's `check_remote_jdk_configs.sh`.
 
 Output is deterministic (stable ordering: major, then os, then arch) so diffs are
 reviewable and re-runs are idempotent.
@@ -273,7 +289,13 @@ reviewable and re-runs are idempotent.
 
 - `java/repositories.bzl` (copied Zulu list): reference material; superseded by
   generated `corretto/versions.bzl`; deleted once the generator lands.
-- `java/bazel/src/main/java/com/example/ProjectRunner.java`: becomes
-  `tools/update/`'s main class (rewritten around the indexmap source).
+- `java/bazel/src/main/java/com/example/ProjectRunner.java`: already implements the
+  first-level pass — fetching and parsing `version-info.json` (the supported-majors
+  validation layer above). Becomes `tools/update/`'s main class, extended around the
+  indexmap source.
 - `JsonParser.java` (vendored, MIT): kept, moved under `tools/update/`, license header
-  preserved and noted in a `LICENSE`/`NOTICE` entry.
+  preserved and noted in a `LICENSE`/`NOTICE` entry. Its incremental
+  read-from-a-`Reader` design is intentional, not incidental: it enables the
+  partial-stream-then-abort pattern (consume an HTTP body only as far as needed, e.g.
+  to extract a release string, then close the connection) used by the streamed
+  verification above.
