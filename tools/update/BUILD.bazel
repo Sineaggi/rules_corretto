@@ -26,3 +26,14 @@ java_test(
         "@gson//jar",
     ],
 )
+
+java_test(
+    name = "version_info_test",
+    srcs = ["src/test/java/corretto/update/VersionInfoTest.java"],
+    main_class = "corretto.update.VersionInfoTest",
+    use_testrunner = False,
+    deps = [
+        ":test_lib",
+        ":update_lib",
+    ],
+)
