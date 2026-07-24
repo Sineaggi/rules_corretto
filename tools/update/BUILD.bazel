@@ -70,3 +70,14 @@ java_test(
         ":update_lib",
     ],
 )
+
+java_test(
+    name = "stream_check_test",
+    srcs = ["src/test/java/corretto/update/StreamCheckTest.java"],
+    main_class = "corretto.update.StreamCheckTest",
+    use_testrunner = False,
+    deps = [
+        ":test_lib",
+        ":update_lib",
+    ],
+)
