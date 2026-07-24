@@ -2649,6 +2649,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Regenerate configs
         id: regen
+        shell: bash  # explicit shell => bash -eo pipefail; the default shell lacks pipefail and would let `tee` mask updater failures
         run: |
           bazel run //tools/update -- --write | tee update-report.txt
       - name: Verify changed archives (full download)
@@ -2865,7 +2866,10 @@ tasks:
     platform: ${{ platform }}
     bazel: ${{ bazel }}
     build_targets:
-      - "@rules_corretto//corretto/..."
+      # NOT //corretto/... — that reaches corretto/tests, which loads
+      # @bazel_skylib (a dev_dependency, absent when consumed as a non-root
+      # module in BCR presubmit).
+      - "@rules_corretto//corretto:all"
 bcr_test_module:
   module_path: "examples"
   matrix:

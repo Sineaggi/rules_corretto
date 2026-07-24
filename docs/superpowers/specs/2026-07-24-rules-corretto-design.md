@@ -231,10 +231,12 @@ partial-stream-then-abort idea applies to JSON: Gson's `JsonParser.parseReader` 
 exactly one value and does not demand EOF, so metadata can be pulled from a live HTTP
 stream without consuming the whole body.
 
-**Full verification (`--verify`, CI on update PRs only):** downloads each changed
-archive completely, recomputes sha256 against the indexmap value (defense-in-depth —
-the checksum already comes from Amazon's metadata), and re-asserts the top-level
+**Full verification (`--verify`, CI on update PRs only):** downloads each archive
+completely, recomputes sha256 against the indexmap value (defense-in-depth — the
+checksum already comes from Amazon's metadata), and re-asserts the top-level
 directory — the analogue of rules_java's `check_remote_jdk_configs.sh`.
+*(Revised 2026-07-24: implemented as all-entries rather than changed-entries-only —
+strictly safer, ~5–7 GB streamed per CI verify run, accepted.)*
 
 Output is deterministic (stable ordering: major, then os, then arch) so diffs are
 reviewable and re-runs are idempotent.
