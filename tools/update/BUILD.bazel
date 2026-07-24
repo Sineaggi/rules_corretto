@@ -99,3 +99,25 @@ java_test(
         ":update_lib",
     ],
 )
+
+java_test(
+    name = "sync_check_test",
+    srcs = ["src/test/java/corretto/update/SyncCheckTest.java"],
+    main_class = "corretto.update.SyncCheckTest",
+    use_testrunner = False,
+    deps = [
+        ":test_lib",
+        ":update_lib",
+    ],
+)
+
+java_test(
+    name = "sync_test",
+    main_class = "corretto.update.SyncCheck",
+    use_testrunner = False,
+    data = [
+        "//:MODULE.bazel",
+        "//corretto:versions.bzl",
+    ],
+    runtime_deps = [":update_lib"],
+)
