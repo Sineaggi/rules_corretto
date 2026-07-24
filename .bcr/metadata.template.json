@@ -1,0 +1,12 @@
+{
+    "homepage": "https://github.com/Sineaggi/rules_corretto",
+    "maintainers": [
+        {
+            "name": "Sineaggi",
+            "github": "Sineaggi"
+        }
+    ],
+    "repository": ["github:Sineaggi/rules_corretto"],
+    "versions": [],
+    "yanked_versions": {}
+}
