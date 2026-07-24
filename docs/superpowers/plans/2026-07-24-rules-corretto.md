@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A public BCR module providing Amazon Corretto JDK runtime toolchains selectable via `--java_runtime_version=corretto_<N>`, plus a dependency-free Java updater that regenerates the pinned JDK list from Amazon's published metadata.
+**Goal:** A public BCR module providing Amazon Corretto JDK runtime toolchains selectable via `--java_runtime_version=corretto_<N>`, plus a small Java updater (Gson-only dependency) that regenerates the pinned JDK list from Amazon's published metadata.
 
 **Architecture:** Thin wrapper over rules_java's public `remote_java_repository` API called with `prefix = "corretto"` (or `"corretto_alpine"` for musl). A generated `corretto/versions.bzl` struct list drives a small module extension; MODULE.bazel self-registers lazy-fetch toolchain config repos. The updater fetches `indexmap_with_checksum.json` (one HTTP request supplies permanent URLs and SHA256s), derives strip_prefixes, cheaply verifies them by streaming only archive headers, and rewrites `versions.bzl` plus a marked block in MODULE.bazel.
 
-**Tech Stack:** Bazel 9.2.0 (bzlmod only), rules_java 9.6.1, Java 21 (zero third-party jars; vendored MIT JsonParser), GitHub Actions.
+**Tech Stack:** Bazel 9.2.0 (bzlmod only), rules_java 9.6.1, Java 21 (Gson 2.11.0 as the only third-party jar, pinned via http_jar), GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-07-24-rules-corretto-design.md` — read it before starting any task.
 
@@ -20,7 +20,7 @@
 - JDK majors come from Amazon's `supported_lts_releases` (currently 8, 11, 17, 21, 25); feature releases only behind `--include-feature-releases`.
 - Platform matrix per major (7 entries): linux x64/aarch64, alpine x64/aarch64, macos x64/aarch64, windows x64. A missing expected combination is an updater error; unknown metadata keys are ignored.
 - `urls` list contains exactly one URL: `https://corretto.aws` + the indexmap `resource` path (permanent). Never the `downloads/latest/` aliases; no mirrors.
-- Updater is dependency-free Java 21 (`java.net.http`, no Maven/rules_jvm_external). Vendored `JsonParser.java` keeps its MIT license header verbatim.
+- Updater is Java 21 (`java.net.http`). Its ONLY third-party dependency is Gson 2.11.0, fetched as a pinned `http_jar` (sha256 `57928d6e5a6edeb2abd3770a8f95ba44dce45f3b23b7a9dc2b309c581552a78b`) through a `dev_dependency` module extension — no rules_jvm_external, no JUnit. All JSON reading goes through Gson (`com.google.gson.JsonParser.parseReader`), encapsulated inside `VersionInfo`/`IndexMap`.
 - Generated output is deterministic: sort by (major asc, os rank linux<alpine<macos<windows, arch rank x64<aarch64). All file writes are atomic (temp file + move); no partial writes on failure.
 - Tests use `java_test(use_testrunner = False)` with plain-main assertion classes — no JUnit dependency.
 - Every commit message ends with:
@@ -305,39 +305,56 @@ git commit -m "feat: example consumer workspace exercising corretto_21 end to en
 
 ---
 
-### Task 3: Updater scaffolding — move JsonParser, test harness, dogfooded build
+### Task 3: Updater scaffolding — Gson dependency, test harness, dogfooded build
+
+> Revised 2026-07-24: the original task vendored a third-party JsonParser whose
+> only findable upstream is GPL-3.0-only. Per user decision, all JSON goes
+> through Gson instead. The legacy `java/` tree predated git history and is
+> already absent from the working tree — there is nothing to move or delete.
 
 **Files:**
 - Create: `tools/update/BUILD.bazel`
-- Create: `tools/update/src/main/java/corretto/update/JsonParser.java` (moved from `java/bazel/src/main/java/com/example/JsonParser.java`; package line changed, MIT header preserved verbatim)
+- Create: `tools/update/gson.bzl`
+- Modify: `MODULE.bazel` (dev-dependency extension block, OUTSIDE the generated markers)
 - Create: `tools/update/src/test/java/corretto/update/Check.java`
-- Create: `tools/update/src/test/java/corretto/update/JsonParserTest.java`
-- Delete: `java/` (entire legacy directory: `repositories.bzl` reference copy, `ProjectRunner.java`, old `BUILD.bazel`)
+- Create: `tools/update/src/test/java/corretto/update/JsonSmokeTest.java`
 
 **Interfaces:**
 - Consumes: nothing from other tasks.
-- Produces: `corretto.update.JsonParser` — `public static Object parse(Reader in) throws JsonParseException, IOException`. JSON objects parse to `Map<String, Object>`, arrays to `List<Object>`, strings to `String`, numbers to `Number` subclasses. Every later parsing task consumes this.
+- Produces: `@gson//jar` — Gson 2.11.0 on the compile/runtime classpath of `update_lib`. Later tasks parse JSON with `com.google.gson.JsonParser.parseReader(Reader)` and the `JsonObject`/`JsonArray`/`JsonElement` tree API, always inside `VersionInfo`/`IndexMap` — no Gson types escape those classes.
 - Produces: test helper `corretto.update.Check` — `Check.eq(Object expected, Object actual)`, `Check.isTrue(boolean cond, String msg)`, both throwing `AssertionError`.
-- Produces: BUILD targets `//tools/update:update_lib` (java_library over `src/main/java/corretto/update/*.java`) and `//tools/update:test_lib`; the `java_test` pattern (`use_testrunner = False`, plain main) all later tests copy.
+- Produces: BUILD targets `//tools/update:update_lib` (java_library over `src/main/java/corretto/update/*.java`, deps `@gson//jar`) and `//tools/update:test_lib`; the `java_test` pattern (`use_testrunner = False`, plain main) all later tests copy.
 
-- [ ] **Step 1: Move JsonParser, preserving history and the MIT header**
+- [ ] **Step 1: Create the Gson repository extension**
 
-```bash
-mkdir -p tools/update/src/main/java/corretto/update tools/update/src/test/java/corretto/update
-git mv java/bazel/src/main/java/com/example/JsonParser.java tools/update/src/main/java/corretto/update/JsonParser.java
+`tools/update/gson.bzl`:
+
+```starlark
+"""Dev-only dependency: Gson as a single pinned jar (Gson has no transitive deps)."""
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_jar")
+
+def _gson_impl(mctx):
+    http_jar(
+        name = "gson",
+        sha256 = "57928d6e5a6edeb2abd3770a8f95ba44dce45f3b23b7a9dc2b309c581552a78b",
+        urls = ["https://repo1.maven.org/maven2/com/google/code/gson/gson/2.11.0/gson-2.11.0.jar"],
+    )
+    return mctx.extension_metadata(reproducible = True)
+
+gson_ext = module_extension(
+    implementation = _gson_impl,
+)
 ```
 
-Edit only the package line in `JsonParser.java`: `package com.example;` → `package corretto.update;`. Do not touch the MIT license comment block. Note: `JsonParser`'s incremental `Reader` consumption (reads only until a complete value) is intentional and load-bearing for Task 8's partial-stream verification — do not "optimize" it into a read-fully parser.
+Append to `MODULE.bazel`, AFTER the `# END GENERATED REPOS` marker (never inside the markers):
 
-Then delete the rest of the legacy tree:
-
-```bash
-git rm -r java
+```starlark
+gson = use_extension("//tools/update:gson.bzl", "gson_ext", dev_dependency = True)
+use_repo(gson, "gson")
 ```
 
-(`java/repositories.bzl` was reference material copied from rules_java; `ProjectRunner.java`'s version-info fetch is reimplemented with tests in Tasks 4 and 9.)
-
-- [ ] **Step 2: Write the test helper and the failing JsonParser smoke test**
+- [ ] **Step 2: Write the test helper and the failing Gson smoke test**
 
 `tools/update/src/test/java/corretto/update/Check.java`:
 
@@ -363,28 +380,29 @@ public final class Check {
 }
 ```
 
-`tools/update/src/test/java/corretto/update/JsonParserTest.java`:
+`tools/update/src/test/java/corretto/update/JsonSmokeTest.java`:
 
 ```java
 package corretto.update;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.StringReader;
-import java.util.List;
-import java.util.Map;
 
-public final class JsonParserTest {
-    public static void main(String[] args) throws Exception {
-        Object parsed = JsonParser.parse(new StringReader(
-            "{\"a\": [1, 2], \"b\": {\"c\": \"d\"}, \"e\": true}"));
-        Map<?, ?> root = (Map<?, ?>) parsed;
-        Check.eq(2, ((List<?>) root.get("a")).size());
-        Check.eq("d", ((Map<?, ?>) root.get("b")).get("c"));
-        Check.eq(Boolean.TRUE, root.get("e"));
-        // Incremental behavior: parse() must stop at the end of the first value,
-        // leaving trailing garbage unread (this is what Task 8 relies on).
-        Object first = JsonParser.parse(new StringReader("{\"x\": 1} TRAILING GARBAGE"));
-        Check.eq(1, ((Number) ((Map<?, ?>) first).get("x")).intValue());
-        System.out.println("JsonParserTest OK");
+public final class JsonSmokeTest {
+    public static void main(String[] args) {
+        JsonObject root = JsonParser.parseReader(new StringReader(
+            "{\"a\": [1, 2], \"b\": {\"c\": \"d\"}, \"e\": true}")).getAsJsonObject();
+        Check.eq(2, root.getAsJsonArray("a").size());
+        Check.eq("d", root.getAsJsonObject("b").get("c").getAsString());
+        Check.isTrue(root.get("e").getAsBoolean(), "boolean parses");
+        // Streaming contract the updater relies on: parseReader reads ONE value
+        // and does not demand EOF — trailing bytes after the value stay unread,
+        // so it can parse from a live HTTP stream that is closed early.
+        JsonObject first = JsonParser.parseReader(new StringReader(
+            "{\"x\": 1} TRAILING GARBAGE")).getAsJsonObject();
+        Check.eq(1, first.get("x").getAsInt());
+        System.out.println("JsonSmokeTest OK");
     }
 }
 ```
@@ -398,7 +416,11 @@ package(default_visibility = ["//visibility:private"])
 
 java_library(
     name = "update_lib",
-    srcs = glob(["src/main/java/corretto/update/*.java"]),
+    srcs = glob(
+        ["src/main/java/corretto/update/*.java"],
+        allow_empty = True,
+    ),
+    deps = ["@gson//jar"],
 )
 
 java_library(
@@ -407,30 +429,32 @@ java_library(
 )
 
 java_test(
-    name = "json_parser_test",
-    srcs = ["src/test/java/corretto/update/JsonParserTest.java"],
-    main_class = "corretto.update.JsonParserTest",
+    name = "json_smoke_test",
+    srcs = ["src/test/java/corretto/update/JsonSmokeTest.java"],
+    main_class = "corretto.update.JsonSmokeTest",
     use_testrunner = False,
     deps = [
         ":test_lib",
-        ":update_lib",
+        "@gson//jar",
     ],
 )
 ```
 
+(`allow_empty = True` because no main-tree sources exist until Task 4; remove nothing later — the glob just starts matching.)
+
 - [ ] **Step 4: Run the test; verify it passes**
 
 ```bash
-bazel test //tools/update:json_parser_test --test_output=errors
+bazel test //tools/update:json_smoke_test --test_output=errors
 ```
 
-Expected: `PASSED`. (If the number assertion fails because JsonParser produces a different Number subtype, the `.intValue()` comparison is the fix pattern — tests must never assume Long vs Integer vs Double.)
+Expected: `PASSED` with output `JsonSmokeTest OK`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: updater scaffolding; vendor JsonParser under tools/update; drop legacy java/ tree"
+git commit -m "feat: updater scaffolding with pinned gson dependency and plain-main test harness"
 ```
 
 ---
@@ -443,7 +467,7 @@ git commit -m "feat: updater scaffolding; vendor JsonParser under tools/update; 
 - Modify: `tools/update/BUILD.bazel` (add test target)
 
 **Interfaces:**
-- Consumes: `JsonParser.parse(Reader)` from Task 3.
+- Consumes: `@gson//jar` via `:update_lib` (Task 3). Gson types stay internal to this class.
 - Produces: `public record VersionInfo(List<Integer> lts, List<Integer> feature)` with:
   - `public static VersionInfo parse(Reader in)` — parses `version-info.json`.
   - `public List<Integer> majors(boolean includeFeature)` — sorted ascending.
@@ -516,21 +540,23 @@ Expected: FAIL — compilation error, `VersionInfo` does not exist.
 ```java
 package corretto.update;
 
-import java.io.IOException;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
 public record VersionInfo(List<Integer> lts, List<Integer> feature) {
 
-    public static VersionInfo parse(Reader in) throws IOException {
-        Map<?, ?> root = (Map<?, ?>) JsonParser.parse(in);
+    public static VersionInfo parse(Reader in) {
+        JsonObject root = JsonParser.parseReader(in).getAsJsonObject();
         return new VersionInfo(
-            ints(root.get("supported_lts_releases")),
-            ints(root.get("supported_feature_releases")));
+            ints(root.getAsJsonArray("supported_lts_releases")),
+            ints(root.getAsJsonArray("supported_feature_releases")));
     }
 
     public List<Integer> majors(boolean includeFeature) {
@@ -556,15 +582,17 @@ public record VersionInfo(List<Integer> lts, List<Integer> feature) {
         return sb.toString();
     }
 
-    private static List<Integer> ints(Object jsonArray) {
+    private static List<Integer> ints(JsonArray array) {
         List<Integer> result = new ArrayList<>();
-        for (Object o : (List<?>) jsonArray) {
-            result.add(((Number) o).intValue());
+        for (JsonElement e : array) {
+            result.add(e.getAsInt());
         }
         return result;
     }
 }
 ```
+
+(`parse` declares no checked exceptions — Gson throws unchecked `JsonSyntaxException`/`JsonIOException`; also drop the now-unused `throws Exception`-only imports if the compiler flags them.)
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -592,7 +620,7 @@ git commit -m "feat: parse Corretto version-info.json and report lifecycle chang
 - Modify: `tools/update/BUILD.bazel` (add test target)
 
 **Interfaces:**
-- Consumes: `JsonParser` (Task 3).
+- Consumes: `@gson//jar` via `:update_lib` (Task 3). Gson types stay internal to IndexMap.
 - Produces: `public record Artifact(int major, String os, String arch, String fullVersion, String resource, String sha256)` — `os` ∈ {`linux`, `alpine`, `macos`, `windows`} (indexmap key spelling), `arch` ∈ {`x64`, `aarch64`}, `fullVersion` like `"21.0.12.8.1"`, `resource` like `"/downloads/resources/21.0.12.8.1/amazon-corretto-21.0.12.8.1-linux-x64.tar.gz"`.
 - Produces: `public static List<Artifact> parse(Reader in, List<Integer> majors)` in `IndexMap` — filtered to image_type `jdk`, format `tar.gz` (`zip` for windows), the 7-combo matrix; throws `IllegalStateException` naming the missing combo if an expected one is absent; silently skips unknown os/arch keys. Result sorted by (major, os rank linux<alpine<macos<windows, arch rank x64<aarch64).
 
@@ -722,12 +750,13 @@ public record Artifact(
 ```java
 package corretto.update;
 
-import java.io.IOException;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 public final class IndexMap {
     private IndexMap() {}
@@ -740,8 +769,8 @@ public final class IndexMap {
         return os.equals("windows") ? List.of("x64") : ARCH_ORDER;
     }
 
-    public static List<Artifact> parse(Reader in, List<Integer> majors) throws IOException {
-        Map<?, ?> root = (Map<?, ?>) JsonParser.parse(in);
+    public static List<Artifact> parse(Reader in, List<Integer> majors) {
+        JsonObject root = JsonParser.parseReader(in).getAsJsonObject();
         List<Artifact> result = new ArrayList<>();
         for (String os : OS_ORDER) {
             for (String arch : archesFor(os)) {
@@ -757,28 +786,36 @@ public final class IndexMap {
         return result;
     }
 
-    private static Artifact lookup(Map<?, ?> root, String os, String arch, int major) {
+    private static JsonObject childObject(JsonElement node, String key) {
+        if (node == null || !node.isJsonObject()) {
+            return null;
+        }
+        JsonElement child = node.getAsJsonObject().get(key);
+        return (child != null && child.isJsonObject()) ? child.getAsJsonObject() : null;
+    }
+
+    private static Artifact lookup(JsonObject root, String os, String arch, int major) {
         String format = os.equals("windows") ? "zip" : "tar.gz";
-        Object node = root.get(os);
-        node = node instanceof Map<?, ?> m ? m.get(arch) : null;
-        node = node instanceof Map<?, ?> m ? m.get("jdk") : null;
-        node = node instanceof Map<?, ?> m ? m.get(String.valueOf(major)) : null;
-        node = node instanceof Map<?, ?> m ? m.get(format) : null;
-        if (!(node instanceof Map<?, ?> entry)) {
+        JsonObject node = childObject(root, os);
+        node = childObject(node, arch);
+        node = childObject(node, "jdk");
+        node = childObject(node, String.valueOf(major));
+        JsonObject entry = childObject(node, format);
+        if (entry == null) {
             throw new IllegalStateException(
                 "indexmap is missing expected combination: " + os + "/" + arch + "/jdk/"
                     + major + "/" + format);
         }
-        String resource = (String) entry.get("resource");
-        String sha256 = (String) entry.get("checksum_sha256");
+        JsonElement resource = entry.get("resource");
+        JsonElement sha256 = entry.get("checksum_sha256");
         if (resource == null || sha256 == null) {
             throw new IllegalStateException(
                 "indexmap entry incomplete for " + os + "/" + arch + "/" + major);
         }
         // resource = /downloads/resources/<fullVersion>/<file>
-        String[] parts = resource.split("/");
+        String[] parts = resource.getAsString().split("/");
         String fullVersion = parts[3];
-        return new Artifact(major, os, arch, fullVersion, resource, sha256);
+        return new Artifact(major, os, arch, fullVersion, resource.getAsString(), sha256.getAsString());
     }
 }
 ```
@@ -2702,7 +2739,6 @@ git commit -m "ci: build/test matrix with alpine job, weekly update PRs, tag-dri
 
 **Files:**
 - Create: `LICENSE` (Apache-2.0)
-- Create: `NOTICE`
 - Modify: `README.md` (full rewrite)
 - Create: `.bcr/metadata.template.json`
 - Create: `.bcr/source.template.json`
@@ -2717,22 +2753,15 @@ git commit -m "ci: build/test matrix with alpine job, weekly update PRs, tag-dri
 
 The `.bcr` templates and README badges need the canonical `github.com/<owner>/rules_corretto` location and the maintainer's GitHub username. **Ask the user before this step** — do not guess. Substitute `<OWNER>` and `<GH_USER>` below with the answers.
 
-- [ ] **Step 2: Add LICENSE and NOTICE**
+- [ ] **Step 2: Add LICENSE**
 
 ```bash
 curl -fsSL https://www.apache.org/licenses/LICENSE-2.0.txt > LICENSE
 ```
 
-`NOTICE`:
-
-```
-rules_corretto
-Copyright 2026 rules_corretto authors
-
-This product includes JsonParser.java (tools/update/src/main/java/corretto/update/JsonParser.java),
-Copyright (c) 2022 TheKodeToad, used under the MIT License. The full license text
-is retained in that file's header.
-```
+(No NOTICE file needed: the updater's only third-party code is the Gson jar, a
+build-time dependency fetched by hash — nothing third-party is vendored into
+this repository.)
 
 - [ ] **Step 3: Rewrite README.md**
 
@@ -2886,8 +2915,8 @@ Expected: all tests PASS; example prints `vendor=Amazon.com Inc.`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add LICENSE NOTICE README.md .bcr
-git commit -m "docs: README, Apache-2.0 license, NOTICE for vendored JsonParser, BCR templates"
+git add LICENSE README.md .bcr
+git commit -m "docs: README, Apache-2.0 license, BCR templates"
 ```
 
 ---

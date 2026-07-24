@@ -13,9 +13,10 @@ runtime with `--java_runtime_version=corretto_21` (or `corretto_8/11/17/25`,
 
 The module is a thin wrapper over `rules_java`'s public
 `@rules_java//toolchains:remote_java_repository.bzl` API. Most of the project's real
-code is the **updater tool**: a dependency-free Java binary that regenerates the pinned
-JDK config list from Amazon's published metadata, runnable standalone at any time, with
-scheduled CI as a thin cron wrapper that opens update PRs.
+code is the **updater tool**: a small Java binary (Gson as its only third-party
+dependency, pulled as a pinned `http_jar`) that regenerates the pinned JDK config list
+from Amazon's published metadata, runnable standalone at any time, with scheduled CI as
+a thin cron wrapper that opens update PRs.
 
 ## Requirements (decided during brainstorming)
 
@@ -127,7 +128,7 @@ rules_corretto/
 │   ├── BUILD.bazel
 │   ├── extensions.bzl            # module extension
 │   └── versions.bzl              # GENERATED: CORRETTO_JDK_CONFIGS struct list
-├── tools/update/                 # updater Java binary + vendored JsonParser (MIT)
+├── tools/update/                 # updater Java binary (Gson via pinned http_jar)
 ├── examples/                     # real consumer workspace; doubles as integration test
 ├── test/                         # consistency + updater unit tests
 └── .github/workflows/            # ci.yml, update.yml, release.yml
@@ -180,8 +181,9 @@ JDK 8 is safe to ship: it is a runtime target, never the compile JVM.
 
 ## Section 3: Updater tool
 
-A Java binary built by rules_java in this repo (dogfooding), dependency-free (vendored
-MIT-licensed `JsonParser`):
+A Java binary built by rules_java in this repo (dogfooding). All JSON parsing uses Gson
+(2.11.0, fetched as a single pinned `http_jar` dev dependency — Gson has no transitive
+deps, so no rules_jvm_external is needed):
 
 ```
 bazel run //tools/update             # dry-run: print diff, exit non-zero if stale
@@ -224,11 +226,10 @@ read the first tar entry header (tar.gz) or first local file header (zip), which
 carries the top-level directory name — then aborting the connection. Kilobytes per
 archive instead of hundreds of megabytes, so this check runs on every updater
 invocation for changed entries, and a derivation-rule drift (e.g. Amazon changing the
-Windows layout) is caught at generation time, not in CI. This partial-stream-then-abort
-technique is the same idea already present in the seed code: `JsonParser` deliberately
-reads incrementally from a `Reader` and stops as soon as it has a complete value,
-allowing metadata to be pulled from a live HTTP stream without consuming the whole
-body.
+Windows layout) is caught at generation time, not in CI. The same
+partial-stream-then-abort idea applies to JSON: Gson's `JsonParser.parseReader` reads
+exactly one value and does not demand EOF, so metadata can be pulled from a live HTTP
+stream without consuming the whole body.
 
 **Full verification (`--verify`, CI on update PRs only):** downloads each changed
 archive completely, recomputes sha256 against the indexmap value (defense-in-depth —
@@ -289,13 +290,12 @@ reviewable and re-runs are idempotent.
 
 - `java/repositories.bzl` (copied Zulu list): reference material; superseded by
   generated `corretto/versions.bzl`; deleted once the generator lands.
-- `java/bazel/src/main/java/com/example/ProjectRunner.java`: already implements the
+- `java/bazel/src/main/java/com/example/ProjectRunner.java`: already implemented the
   first-level pass — fetching and parsing `version-info.json` (the supported-majors
-  validation layer above). Becomes `tools/update/`'s main class, extended around the
-  indexmap source.
-- `JsonParser.java` (vendored, MIT): kept, moved under `tools/update/`, license header
-  preserved and noted in a `LICENSE`/`NOTICE` entry. Its incremental
-  read-from-a-`Reader` design is intentional, not incidental: it enables the
-  partial-stream-then-abort pattern (consume an HTTP body only as far as needed, e.g.
-  to extract a release string, then close the connection) used by the streamed
-  verification above.
+  validation layer above). Its role is reimplemented, with tests, as the updater's
+  `VersionInfo` + `Main`.
+- `JsonParser.java`: originally planned as a vendored MIT parser, but its only findable
+  upstream (TheKodeToad's parser in PrismLauncher) is GPL-3.0-only, incompatible with
+  this repo's Apache-2.0 license. **Decision (2026-07-24): all JSON reading uses Gson
+  instead** — license-clean, battle-tested, and its `parseReader` preserves the needed
+  read-one-value-then-abort streaming property.
