@@ -4,7 +4,11 @@ package(default_visibility = ["//visibility:private"])
 
 java_library(
     name = "update_lib",
-    srcs = glob(["src/main/java/corretto/update/*.java"]),
+    srcs = glob(
+        ["src/main/java/corretto/update/*.java"],
+        allow_empty = True,
+    ),
+    deps = ["@gson//jar"],
 )
 
 java_library(
@@ -13,12 +17,12 @@ java_library(
 )
 
 java_test(
-    name = "json_parser_test",
-    srcs = ["src/test/java/corretto/update/JsonParserTest.java"],
-    main_class = "corretto.update.JsonParserTest",
+    name = "json_smoke_test",
+    srcs = ["src/test/java/corretto/update/JsonSmokeTest.java"],
+    main_class = "corretto.update.JsonSmokeTest",
     use_testrunner = False,
     deps = [
         ":test_lib",
-        ":update_lib",
+        "@gson//jar",
     ],
 )

@@ -23,3 +23,6 @@ register_toolchains("@corretto21_linux_toolchain_config_repo//:all")
 
 register_toolchains("@corretto21_macos_aarch64_toolchain_config_repo//:all")
 # END GENERATED REPOS
+
+gson = use_extension("//tools/update:gson.bzl", "gson_ext", dev_dependency = True)
+use_repo(gson, "gson")
