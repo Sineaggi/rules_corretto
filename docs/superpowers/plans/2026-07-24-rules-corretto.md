@@ -2849,7 +2849,7 @@ runs it and opens a PR.
 {
     "integrity": "",
     "strip_prefix": "{REPO}-{VERSION}",
-    "url": "https://github.com/{OWNER}/{REPO}/releases/download/v{TAG}/{REPO}-{VERSION}.tar.gz"
+    "url": "https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/{REPO}-{VERSION}.tar.gz"
 }
 ```
 
