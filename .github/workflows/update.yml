@@ -1,0 +1,33 @@
+name: Update JDK configs
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate configs
+        id: regen
+        run: |
+          bazel run //tools/update -- --write | tee update-report.txt
+      - name: Verify changed archives (full download)
+        run: |
+          if ! git diff --quiet; then
+            bazel run //tools/update -- --verify
+          fi
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto/update-jdk-configs
+          commit-message: "chore: update Corretto JDK configs"
+          title: "Update Corretto JDK configs"
+          body-path: update-report.txt
+          delete-branch: true

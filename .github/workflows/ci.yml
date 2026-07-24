@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit and consistency tests
+        run: bazel test //... --test_output=errors
+      - name: Example resolves Corretto 21
+        shell: bash
+        working-directory: examples
+        run: |
+          out=$(bazel run //:hello --java_runtime_version=corretto_21)
+          echo "$out"
+          echo "$out" | grep -q "vendor=Amazon.com Inc."
+      - name: Example default runtime untouched
+        shell: bash
+        working-directory: examples
+        run: bazel run //:hello
+
+  alpine:
+    runs-on: ubuntu-latest
+    container: alpine:3.20
+    steps:
+      - name: Install prerequisites
+        run: apk add --no-cache bash curl git python3 gcc musl-dev
+      - uses: actions/checkout@v4
+      - name: Install bazelisk
+        run: |
+          curl -fsSL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+      - name: Example resolves Corretto alpine 21
+        shell: bash
+        working-directory: examples
+        run: |
+          out=$(bazel run //:hello --java_runtime_version=corretto_alpine_21)
+          echo "$out"
+          echo "$out" | grep -q "vendor=Amazon.com Inc."
+
+  updater-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configs are current (dry-run)
+        run: bazel run //tools/update
+        continue-on-error: true  # staleness is the cron's job to fix, not a CI failure
