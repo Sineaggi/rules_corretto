@@ -40,8 +40,13 @@ public final class StarlarkWriter {
     public static String moduleBlock(List<Artifact> artifacts) {
         StringBuilder sb = new StringBuilder();
         sb.append("use_repo(\n    corretto,\n");
-        for (Artifact a : artifacts) {
-            sb.append("    \"").append(Derive.repoName(a)).append("_toolchain_config_repo\",\n");
+        // buildifier sorts use_repo args lexicographically over the full string
+        // (suffix included); emitting its order keeps the file formatter-stable.
+        for (String repo : artifacts.stream()
+                .map(a -> Derive.repoName(a) + "_toolchain_config_repo")
+                .sorted()
+                .toList()) {
+            sb.append("    \"").append(repo).append("\",\n");
         }
         sb.append(")\n");
         for (Artifact a : artifacts) {

@@ -1039,7 +1039,7 @@ git commit -m "feat: derive urls, strip prefixes, repo names, and constraints fr
 - Consumes: `Artifact`, `Derive` (Tasks 5–6).
 - Produces (static on `corretto.update.StarlarkWriter`):
   - `String versionsBzl(List<Artifact> artifacts)` — complete file content, entries in list order (already sorted by IndexMap).
-  - `String moduleBlock(List<Artifact> artifacts)` — the content BETWEEN the markers (one `use_repo(...)` then one `register_toolchains` per repo).
+  - `String moduleBlock(List<Artifact> artifacts)` — the content BETWEEN the markers (one `use_repo(...)` then one `register_toolchains` per repo). *(Revised 2026-07-24: use_repo args are emitted in buildifier's sort order — lexicographic over the full repo string including the `_toolchain_config_repo` suffix — so buildozer/buildifier leave the file untouched; SyncCheck compares against the same order. register_toolchains statements stay in artifact order, which buildifier does not reorder.)*
   - `String replaceBlock(String moduleContent, String newBlock)` — swaps the text between `# BEGIN GENERATED REPOS - managed by //tools/update, do not edit` and `# END GENERATED REPOS`; throws `IllegalStateException` if markers are missing or out of order.
 - The exact marker strings match Task 1's MODULE.bazel.
 

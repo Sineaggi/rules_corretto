@@ -24,10 +24,16 @@ public final class SyncCheck {
         List<String> registered =
             extract(block, "register_toolchains\\(\"@([a-z0-9_]+)_toolchain_config_repo//:all\"\\)");
 
-        if (!configNames.equals(useRepoNames)) {
+        // use_repo is expected in buildifier's order: lexicographic over the
+        // full repo string including the _toolchain_config_repo suffix, which
+        // the generator emits (StarlarkWriter.moduleBlock).
+        List<String> sortedConfigNames = configNames.stream()
+            .sorted(java.util.Comparator.comparing(n -> n + "_toolchain_config_repo"))
+            .toList();
+        if (!sortedConfigNames.equals(useRepoNames)) {
             throw new IllegalStateException(
-                "versions.bzl and MODULE.bazel use_repo diverge.\nversions.bzl: " + configNames
-                    + "\nMODULE.bazel: " + useRepoNames
+                "versions.bzl and MODULE.bazel use_repo diverge.\nversions.bzl (sorted): "
+                    + sortedConfigNames + "\nMODULE.bazel: " + useRepoNames
                     + "\nRun: bazel run //tools/update -- --write");
         }
         if (!configNames.equals(registered)) {
