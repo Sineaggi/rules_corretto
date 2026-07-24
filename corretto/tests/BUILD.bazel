@@ -1,0 +1,3 @@
+load(":derive_test.bzl", "derive_test_suite")
+
+derive_test_suite(name = "derive_tests")
