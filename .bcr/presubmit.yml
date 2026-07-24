@@ -7,7 +7,8 @@ tasks:
     platform: ${{ platform }}
     bazel: ${{ bazel }}
     build_targets:
-      - "@rules_corretto//corretto/..."
+      # NOT //corretto/... — that reaches corretto/tests, which loads @bazel_skylib (a dev_dependency, absent when consumed as a non-root module in BCR presubmit).
+      - "@rules_corretto//corretto:all"
 bcr_test_module:
   module_path: "examples"
   matrix:

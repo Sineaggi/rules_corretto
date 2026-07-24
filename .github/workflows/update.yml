@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Regenerate configs
         id: regen
+        shell: bash
         run: |
           bazel run //tools/update -- --write | tee update-report.txt
       - name: Verify changed archives (full download)
