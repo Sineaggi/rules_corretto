@@ -249,8 +249,10 @@ reviewable and re-runs are idempotent.
 - **Integration test:** `examples/` is a real consumer workspace. CI matrix
   (ubuntu/macos/windows GitHub runners) runs
   `bazel run //:hello --java_runtime_version=corretto_<N>` and asserts
-  `System.getProperty("java.vendor") == "Amazon.com Inc."`. Alpine covered via a
-  container job on the linux runner using `corretto_alpine_<N>`.
+  `System.getProperty("java.vendor") == "Amazon.com Inc."`. Alpine has no CI job
+  (decision 2026-07-24: Bazel inside musl containers is unreliable); alpine
+  toolchains are covered by the updater's checksum + streamed strip_prefix
+  verification.
 - **update.yml:** weekly cron → `bazel run //tools/update -- --write` → if the working
   tree is dirty, open a PR. The PR's CI runs `--verify` plus the full suite. Human
   merges; the tool is equally runnable locally at any time.

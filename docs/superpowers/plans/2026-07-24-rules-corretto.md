@@ -2614,26 +2614,6 @@ jobs:
         working-directory: examples
         run: bazel run //:hello
 
-  alpine:
-    runs-on: ubuntu-latest
-    container: alpine:3.20
-    steps:
-      - name: Install prerequisites
-        run: apk add --no-cache bash curl git python3 gcc musl-dev
-      - uses: actions/checkout@v4
-      - name: Install bazelisk
-        run: |
-          curl -fsSL -o /usr/local/bin/bazel \
-            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
-          chmod +x /usr/local/bin/bazel
-      - name: Example resolves Corretto alpine 21
-        shell: bash
-        working-directory: examples
-        run: |
-          out=$(bazel run //:hello --java_runtime_version=corretto_alpine_21)
-          echo "$out"
-          echo "$out" | grep -q "vendor=Amazon.com Inc."
-
   updater-fresh:
     runs-on: ubuntu-latest
     steps:
@@ -2643,7 +2623,10 @@ jobs:
         continue-on-error: true  # staleness is the cron's job to fix, not a CI failure
 ```
 
-Note the alpine job proves the musl differentiator end to end: a glibc JDK would fail to exec in the alpine container, so `vendor=Amazon.com Inc.` printing at all proves the musl build was selected.
+> Revised 2026-07-24 (user decision): no alpine CI job. Running Bazel inside a
+> musl container is unreliable (glibc-linked Node for actions/checkout,
+> bazelisk/bazel); alpine toolchains ship covered by the updater's checksum and
+> streamed strip_prefix verification only.
 
 - [ ] **Step 2: Write update.yml**
 
