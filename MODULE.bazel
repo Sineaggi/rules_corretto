@@ -1,0 +1,25 @@
+module(
+    name = "rules_corretto",
+    version = "0.0.0",
+    compatibility_level = 1,
+    bazel_compatibility = [">=7.4.0"],
+)
+
+bazel_dep(name = "rules_java", version = "9.6.1")
+bazel_dep(name = "platforms", version = "0.0.11")
+
+bazel_dep(name = "bazel_skylib", version = "1.7.1", dev_dependency = True)
+
+corretto = use_extension("//corretto:extensions.bzl", "corretto")
+
+# BEGIN GENERATED REPOS - managed by //tools/update, do not edit
+use_repo(
+    corretto,
+    "corretto21_linux_toolchain_config_repo",
+    "corretto21_macos_aarch64_toolchain_config_repo",
+)
+
+register_toolchains("@corretto21_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto21_macos_aarch64_toolchain_config_repo//:all")
+# END GENERATED REPOS
