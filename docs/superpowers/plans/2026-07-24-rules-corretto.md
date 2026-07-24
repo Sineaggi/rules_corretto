@@ -387,6 +387,7 @@ package corretto.update;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.stream.JsonReader;
 import java.io.StringReader;
 
 public final class JsonSmokeTest {
@@ -396,11 +397,14 @@ public final class JsonSmokeTest {
         Check.eq(2, root.getAsJsonArray("a").size());
         Check.eq("d", root.getAsJsonObject("b").get("c").getAsString());
         Check.isTrue(root.get("e").getAsBoolean(), "boolean parses");
-        // Streaming contract the updater relies on: parseReader reads ONE value
-        // and does not demand EOF — trailing bytes after the value stay unread,
-        // so it can parse from a live HTTP stream that is closed early.
-        JsonObject first = JsonParser.parseReader(new StringReader(
-            "{\"x\": 1} TRAILING GARBAGE")).getAsJsonObject();
+        // Streaming note: as of Gson 2.11.0, JsonParser.parseReader(Reader)
+        // demands EOF after the value (throws JsonSyntaxException on trailing
+        // content), while JsonParser.parseReader(JsonReader) stops after one
+        // value. The updater's metadata fetches are complete single-document
+        // bodies, so the Reader overload is fine there; anything needing the
+        // read-one-value-then-abort property must build the JsonReader itself.
+        JsonReader trailing = new JsonReader(new StringReader("{\"x\": 1} TRAILING GARBAGE"));
+        JsonObject first = JsonParser.parseReader(trailing).getAsJsonObject();
         Check.eq(1, first.get("x").getAsInt());
         System.out.println("JsonSmokeTest OK");
     }
