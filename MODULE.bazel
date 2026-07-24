@@ -15,13 +15,112 @@ corretto = use_extension("//corretto:extensions.bzl", "corretto")
 # BEGIN GENERATED REPOS - managed by //tools/update, do not edit
 use_repo(
     corretto,
+    "corretto8_linux_toolchain_config_repo",
+    "corretto8_linux_aarch64_toolchain_config_repo",
+    "corretto_alpine8_linux_toolchain_config_repo",
+    "corretto_alpine8_linux_aarch64_toolchain_config_repo",
+    "corretto8_macos_toolchain_config_repo",
+    "corretto8_macos_aarch64_toolchain_config_repo",
+    "corretto8_win_toolchain_config_repo",
+    "corretto11_linux_toolchain_config_repo",
+    "corretto11_linux_aarch64_toolchain_config_repo",
+    "corretto_alpine11_linux_toolchain_config_repo",
+    "corretto_alpine11_linux_aarch64_toolchain_config_repo",
+    "corretto11_macos_toolchain_config_repo",
+    "corretto11_macos_aarch64_toolchain_config_repo",
+    "corretto11_win_toolchain_config_repo",
+    "corretto17_linux_toolchain_config_repo",
+    "corretto17_linux_aarch64_toolchain_config_repo",
+    "corretto_alpine17_linux_toolchain_config_repo",
+    "corretto_alpine17_linux_aarch64_toolchain_config_repo",
+    "corretto17_macos_toolchain_config_repo",
+    "corretto17_macos_aarch64_toolchain_config_repo",
+    "corretto17_win_toolchain_config_repo",
     "corretto21_linux_toolchain_config_repo",
+    "corretto21_linux_aarch64_toolchain_config_repo",
+    "corretto_alpine21_linux_toolchain_config_repo",
+    "corretto_alpine21_linux_aarch64_toolchain_config_repo",
+    "corretto21_macos_toolchain_config_repo",
     "corretto21_macos_aarch64_toolchain_config_repo",
+    "corretto21_win_toolchain_config_repo",
+    "corretto25_linux_toolchain_config_repo",
+    "corretto25_linux_aarch64_toolchain_config_repo",
+    "corretto_alpine25_linux_toolchain_config_repo",
+    "corretto_alpine25_linux_aarch64_toolchain_config_repo",
+    "corretto25_macos_toolchain_config_repo",
+    "corretto25_macos_aarch64_toolchain_config_repo",
+    "corretto25_win_toolchain_config_repo",
 )
+
+register_toolchains("@corretto8_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto8_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine8_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine8_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto8_macos_toolchain_config_repo//:all")
+
+register_toolchains("@corretto8_macos_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto8_win_toolchain_config_repo//:all")
+
+register_toolchains("@corretto11_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto11_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine11_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine11_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto11_macos_toolchain_config_repo//:all")
+
+register_toolchains("@corretto11_macos_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto11_win_toolchain_config_repo//:all")
+
+register_toolchains("@corretto17_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto17_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine17_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine17_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto17_macos_toolchain_config_repo//:all")
+
+register_toolchains("@corretto17_macos_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto17_win_toolchain_config_repo//:all")
 
 register_toolchains("@corretto21_linux_toolchain_config_repo//:all")
 
+register_toolchains("@corretto21_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine21_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine21_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto21_macos_toolchain_config_repo//:all")
+
 register_toolchains("@corretto21_macos_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto21_win_toolchain_config_repo//:all")
+
+register_toolchains("@corretto25_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto25_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine25_linux_toolchain_config_repo//:all")
+
+register_toolchains("@corretto_alpine25_linux_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto25_macos_toolchain_config_repo//:all")
+
+register_toolchains("@corretto25_macos_aarch64_toolchain_config_repo//:all")
+
+register_toolchains("@corretto25_win_toolchain_config_repo//:all")
 # END GENERATED REPOS
 
 gson = use_extension("//tools/update:gson.bzl", "gson_ext", dev_dependency = True)

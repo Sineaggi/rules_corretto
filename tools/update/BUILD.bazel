@@ -81,3 +81,21 @@ java_test(
         ":update_lib",
     ],
 )
+
+java_binary(
+    name = "update",
+    main_class = "corretto.update.Main",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":update_lib"],
+)
+
+java_test(
+    name = "updater_test",
+    srcs = ["src/test/java/corretto/update/UpdaterTest.java"],
+    main_class = "corretto.update.UpdaterTest",
+    use_testrunner = False,
+    deps = [
+        ":test_lib",
+        ":update_lib",
+    ],
+)
