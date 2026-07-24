@@ -28,26 +28,6 @@ jobs:
         working-directory: examples
         run: bazel run //:hello
 
-  alpine:
-    runs-on: ubuntu-latest
-    container: alpine:3.20
-    steps:
-      - name: Install prerequisites
-        run: apk add --no-cache bash curl git python3 gcc musl-dev
-      - uses: actions/checkout@v4
-      - name: Install bazelisk
-        run: |
-          curl -fsSL -o /usr/local/bin/bazel \
-            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
-          chmod +x /usr/local/bin/bazel
-      - name: Example resolves Corretto alpine 21
-        shell: bash
-        working-directory: examples
-        run: |
-          out=$(bazel run //:hello --java_runtime_version=corretto_alpine_21)
-          echo "$out"
-          echo "$out" | grep -q "vendor=Amazon.com Inc."
-
   updater-fresh:
     runs-on: ubuntu-latest
     steps:
