@@ -7,3 +7,7 @@ local_path_override(
 )
 
 bazel_dep(name = "rules_java", version = "9.6.1")
+
+# Root-registered toolchains outrank rules_java's, so this compilation
+# toolchain (JavaBuilder/turbine on Corretto) wins for --java_language_version=21.
+register_toolchains("//:corretto_toolchain_definition")

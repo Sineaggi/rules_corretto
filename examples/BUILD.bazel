@@ -1,4 +1,21 @@
 load("@rules_java//java:defs.bzl", "java_binary")
+load("@rules_java//toolchains:default_java_toolchain.bzl", "DEFAULT_TOOLCHAIN_CONFIGURATION", "default_java_toolchain")
+load("@rules_java//toolchains:java_toolchain_alias.bzl", "java_runtime_version_alias")
+
+# Compilation toolchain whose build tools (JavaBuilder, turbine) run on
+# Corretto instead of the remotejdk rules_java's default toolchain pins.
+# Registered in MODULE.bazel; needed only for single-vendor setups.
+java_runtime_version_alias(
+    name = "corretto_21_runtime",
+    runtime_version = "corretto_21",
+)
+
+default_java_toolchain(
+    name = "corretto_toolchain",
+    configuration = DEFAULT_TOOLCHAIN_CONFIGURATION | {"java_runtime": ":corretto_21_runtime"},
+    source_version = "21",
+    target_version = "21",
+)
 
 java_binary(
     name = "hello",
