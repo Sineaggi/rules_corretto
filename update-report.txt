@@ -1,0 +1,2 @@
+configs changed
+wrote corretto/versions.bzl and MODULE.bazel
