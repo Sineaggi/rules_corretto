@@ -18,7 +18,7 @@ jobs:
         id: regen
         shell: bash
         run: |
-          bazel run //tools/update -- --write | tee update-report.txt
+          bazel run //tools/update -- --write | tee "$RUNNER_TEMP/update-report.txt"
       - name: Verify changed archives (full download)
         run: |
           if ! git diff --quiet; then
@@ -30,5 +30,8 @@ jobs:
           branch: auto/update-jdk-configs
           commit-message: "chore: update Corretto JDK configs"
           title: "Update Corretto JDK configs"
-          body-path: update-report.txt
+          body-path: ${{ runner.temp }}/update-report.txt
+          add-paths: |
+            corretto/versions.bzl
+            MODULE.bazel
           delete-branch: true
